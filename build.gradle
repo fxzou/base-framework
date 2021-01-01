@@ -1,0 +1,126 @@
+plugins {
+    id 'org.springframework.boot' version '2.4.1'
+    id 'io.spring.dependency-management' version '1.0.10.RELEASE'
+    id 'java'
+    id 'checkstyle'
+    id 'jacoco'
+    id 'com.adarshr.test-logger' version '2.0.0'
+}
+
+group = 'demo.fxzou'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '11'
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    springCloudVersion = 'Greenwich.SR1'
+    lib = [
+            springBoot: [
+                    'org.springframework.boot:spring-boot-starter-data-jpa',
+                    'org.springframework.boot:spring-boot-starter-web'
+            ],
+            db        : [
+                    'mysql:mysql-connector-java'
+            ],
+            test      : [
+                    'org.springframework.boot:spring-boot-starter-test'
+            ]
+    ]
+}
+
+dependencies {
+    implementation lib.springBoot, lib.db
+    testImplementation lib.test
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
+}
+
+test {
+    useJUnitPlatform {
+        excludeTags 'architecture'
+    }
+    testlogger {
+        slowThreshold 1000
+    }
+    finalizedBy jacocoTestReport
+}
+
+def exclusionFiles = [
+        '**/domain/core/**',
+        '**/configurations/**',
+        '**/utils/lock/**',
+        '**/src/main/**/valueobject/**',
+        '**/src/main/java/db/migration/**'
+]
+
+jacoco {
+    toolVersion = '0.8.3'
+    reportsDir = file("$buildDir/jacocoReportDir")
+}
+
+jacocoTestReport {
+    reports {
+        xml.enabled true
+    }
+
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: exclusionFiles)
+        }))
+    }
+
+    finalizedBy jacocoTestCoverageVerification
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.5
+            }
+        }
+
+        rule {
+            enabled = false
+            element = 'CLASS'
+            includes = ['org.gradle.*']
+
+            limit {
+                counter = 'LINE'
+                value = 'TOTALCOUNT'
+                maximum = 0.3
+            }
+        }
+    }
+}
+
+checkstyle {
+    configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+    configProperties = [
+            'checkstyle.cache.file': "${buildDir}/checkstyle.cache",
+    ]
+    ignoreFailures = false
+    showViolations = false
+    checkstyleTest.enabled = false
+
+    checkstyleMain.source = 'src/main/java'
+}
+
+test.dependsOn checkstyleMain
+jacocoTestReport.dependsOn test
+jacocoTestCoverageVerification.dependsOn jacocoTestReport
